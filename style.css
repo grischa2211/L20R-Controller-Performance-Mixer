@@ -1198,3 +1198,26 @@ main > .channel-settings:not([open]) { display: none; }
 .dj-filter-control .dj-target-button[data-dj-target="-100"][aria-pressed="true"] { background:#245b93; border-color:#69a8ec; color:#fff; }
 .dj-filter-control .dj-target-button[data-dj-target="100"][aria-pressed="true"] { background:#7643a6; border-color:#bd90eb; color:#fff; }
 .dj-filter-control .dj-target-button[data-dj-target="0"][aria-pressed="true"] { background:#246341; border-color:#6ac58b; color:#fff; }
+
+/* Shared oscillator speeds beside the selected channel's routes. */
+#track-oscillators-panel { padding:8px 10px; }
+#track-oscillators-panel .dj-lfo-panel h3 { margin:0; font-size:.85em; }
+#track-oscillators-panel .lfo-heading { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:12px; align-items:center; margin-bottom:8px; }
+#track-oscillators-panel .lfo-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:12px; align-items:start; }
+#track-oscillators-panel .lfo-sources { display:grid; grid-template-columns:1fr; gap:0; margin:0; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+#track-oscillators-panel .lfo-sources > label { display:grid; grid-template-columns:70px minmax(0,1fr) 42px; gap:6px; height:34px; box-sizing:border-box; padding:4px 0; align-items:center; border:0; border-radius:0; background:transparent; text-align:left; min-width:0; }
+#track-oscillators-panel .lfo-sources > label > span { font-size:.85em; }
+#track-oscillators-panel .lfo-sources output { font-size:11px; text-align:right; }
+#track-oscillators-panel .lfo-sources input[type="range"] { height:20px; margin:0; }
+#track-oscillators-panel .lfo-channel-block { min-width:0; margin:0; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+#track-oscillators-panel .lfo-track-select { font-weight:700; font-size:.9em; max-width:100%; margin:0; padding:3px; }
+#track-oscillators-panel .lfo-route { grid-template-columns:94px minmax(30px,1fr) 32px 86px; gap:5px; height:34px; box-sizing:border-box; padding:4px 0; }
+#track-oscillators-panel .lfo-route label { grid-column:1; grid-row:1; font-size:.75em; white-space:nowrap; }
+#track-oscillators-panel .lfo-route select { grid-column:4; grid-row:1; min-width:0; padding:2px; font-size:.75em; }
+#track-oscillators-panel .lfo-route input[type="range"] { grid-column:2; grid-row:1; min-width:0; height:18px; margin:0; }
+#track-oscillators-panel .lfo-route output { grid-column:3; grid-row:1; font-size:.7em; }
+#track-oscillators-panel .dj-lfo-panel > small { margin:6px 0; font-size:.65em; }
+#track-oscillators-panel .dj-lfo-panel > .btn { padding:4px 8px; font-size:.75em; }
+@media(max-width:600px){
+    #track-oscillators-panel .lfo-columns { grid-template-columns:1fr; }
+}

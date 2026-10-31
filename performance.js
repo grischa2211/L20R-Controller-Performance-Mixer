@@ -99,8 +99,10 @@ var modulation = {
     },
     createMixerUI(){
         const panel=document.createElement('section');panel.classList.add('dj-lfo-panel');
-        const title=document.createElement('h3');title.textContent='Spur-Oszillatoren';panel.appendChild(title);
-        const sources=document.createElement('div');sources.classList.add('lfo-sources');panel.appendChild(sources);
+        const heading=document.createElement('div');heading.classList.add('lfo-heading');panel.appendChild(heading);
+        const title=document.createElement('h3');title.textContent='Spur-Oszillatoren';heading.appendChild(title);
+        const columns=document.createElement('div');columns.classList.add('lfo-columns');panel.appendChild(columns);
+        const sources=document.createElement('div');sources.classList.add('lfo-sources');columns.appendChild(sources);
         for(const source of this.sources){
             const label=document.createElement('label');const name=document.createElement('span');name.textContent=source.name;label.appendChild(name);
             const speed=document.createElement('input');speed.type='range';speed.min=0;speed.max=1000;speed.step=1;
@@ -119,8 +121,9 @@ var modulation = {
         const track=document.createElement('select');track.classList.add('lfo-track-select');track.setAttribute('aria-label','Spur für Oszillatoren');
         const stripsList=Object.values(buses.master.strips).filter(strip=>Number.isInteger(strip.channel));
         for(const strip of stripsList){const option=document.createElement('option');option.value=strip.id;option.textContent=`${strip.stereo?strip.channel+'/'+(strip.channel+1):strip.channel} · ${strip.displayName}`;track.appendChild(option)}
-        track.value=stripsList[0].id;panel.appendChild(track);
-        const rows=document.createElement('div');rows.classList.add('lfo-routes');panel.appendChild(rows);
+        const channelBlock=document.createElement('div');channelBlock.classList.add('lfo-channel-block');columns.appendChild(channelBlock);
+        track.value=stripsList[0].id;heading.appendChild(track);
+        const rows=document.createElement('div');rows.classList.add('lfo-route-groups');channelBlock.appendChild(rows);
         const note=document.createElement('small');note.textContent='Pro Regler separat. Lautstärke wird nur abgesenkt; Panorama und FX-Sends bewegen sich um den Ausgangswert. Stoppen stellt ihn wieder her.';panel.appendChild(note);
         const render=()=>{
             rows.innerHTML='';
