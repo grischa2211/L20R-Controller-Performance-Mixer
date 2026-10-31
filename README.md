@@ -10,6 +10,14 @@ This is a modified and extended version of **[PimDoos/zoom-L20-control](https://
 
 The project retains the **Apache License 2.0**. See [LICENSE](LICENSE). This version adds the performance workflow and UI changes described below and in [AENDERUNGEN.md](AENDERUNGEN.md). It is not affiliated with, endorsed by, or supported by Zoom Corporation.
 
+## Contributors / Mitwirkende
+
+- **[Grischa Windus](https://github.com/grischa2211)** — project direction, feature ideas and hands-on testing with the L-20R / Projektleitung, Funktionsideen und praktische Tests am L-20R.
+- **OpenAI Codex (AI coding assistant / KI-Programmierassistent)** — assisted with implementation, debugging, UI changes and documentation in collaboration with Grischa / Unterstützung bei Implementierung, Fehlersuche, Oberfläche und Dokumentation in Zusammenarbeit mit Grischa.
+- **[PimDoos and upstream contributors](https://github.com/PimDoos/zoom-L20-control)** — original application and protocol foundation / ursprüngliche Anwendung und Protokollgrundlage.
+
+Codex is credited here as an AI tool used in development. This does not imply official OpenAI participation, endorsement or support. / Codex wird hier als bei der Entwicklung eingesetztes KI-Werkzeug genannt. Daraus folgt keine offizielle Beteiligung, Empfehlung oder Unterstützung durch OpenAI.
+
 ## Screenshots & tutorial / Screenshots und Anleitung
 
 **[Open the app / App öffnen](https://grischa2211.github.io/L20R-Controller-Performance-Mixer/)**
