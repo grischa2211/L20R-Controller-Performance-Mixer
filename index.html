@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<!-- Modified/extended from PimDoos/zoom-L20-control; see AENDERUNGEN.md and LICENSE. -->
+<html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+        <title>L20R Controller &amp; Performance Mixer</title>
+        <link rel="stylesheet" href="style.css">
+        <script src="app.js" defer></script>
+        <script src="performance.js" defer></script>
+        <script src="i18n.js" defer></script>
+        <script src="user-settings.js" defer></script>
+        <script src="controls.js"></script>
+        <script src="midi.js"></script>
+    </head>
+    <body>
+        <div class="app-shell">
+            <header class="topbar">
+                <div class="brand">
+                    <span class="brand-icon" aria-hidden="true">🎚️</span>
+                    <h1>L20R Controller &amp; Performance Mixer</h1>
+                </div>
+
+            <section class="track-mode-panel" aria-label="Gemeinsamer Modus der Einzelspuren">
+                <span class="track-mode-label">Ungemutete Spuren</span>
+                <div class="track-mode-buttons" role="group" aria-label="Spurmodus">
+                    <button type="button" class="btn" data-track-mode="0" data-control-id="group_track_off" aria-pressed="false" disabled>Aus</button>
+                    <button type="button" class="btn" data-track-mode="1" data-control-id="group_track_play" aria-pressed="false" disabled>Play</button>
+                    <button type="button" class="btn" data-track-mode="2" data-control-id="group_track_record" aria-pressed="false" disabled>Record</button>
+                </div>
+                <span id="track_mode_status" role="status">Record stellt die Spuren nur auf Aufnahmebereitschaft.</span>
+
+            </section>
+
+                <div id="connectivity" class="connectivity">
+                    <div id="ble_ui" class="conn-item">
+                        <button id="ble_connect" class="status-btn">
+                            <span class="status-dot" aria-hidden="true"></span>
+                            <span class="btn-icon" aria-hidden="true">ᚼᛒ</span>
+                            <span class="btn-label">Bluetooth</span>
+                        </button>
+                    </div>
+                    <div id="ws_ui" class="conn-item">
+                        <button id="ws_connect" class="status-btn">
+                            <span class="status-dot" aria-hidden="true"></span>
+                            <span class="btn-icon" aria-hidden="true">🌐</span>
+                            <span class="btn-label">Websocket</span>
+                        </button>
+                    </div>
+                    <div id="share_ui" class="conn-item">
+                        <button id="share_link" class="status-btn ghost">
+                            <span class="btn-icon" aria-hidden="true">🔗</span>
+                            <span class="btn-label">Share Link</span>
+                        </button>
+                    </div>
+                    <div id="user_ui" class="conn-item user-item">
+                        <input id="nick" type="text" value="" size="12" placeholder="Name">
+                        <input id="color" type="color" value="#00aaff" title="Your color">
+                    </div>
+
+                    <div class="language-tabs" role="group" aria-label="Sprache / Language">
+                        <button type="button" data-language="de" aria-pressed="true">Deutsch</button>
+                        <button type="button" data-language="en" aria-pressed="false">English</button>
+                    </div>
+                    <input type="checkbox" id="show_settings" class="visually-hidden">
+                    <label for="show_settings" class="icon-btn settings-toggle" title="Settings">⚙️</label>
+                </div>
+            </header>
+
+
+
+            <div id="settings_ui" class="settings-panel">
+                <div class="settings-grid">
+                    <div id="room_ui" class="settings-card">
+                        <h3>Room</h3>
+                        <label for="room_id">Room ID</label>
+                        <input id="room_id" type="text" placeholder="Room ID">
+                    </div>
+                    <div id="mixer_settings_ui" class="settings-card">
+                        <h3>Mixer Settings</h3>
+                        <label class="switch-row">
+                            <input type="checkbox" id="peaks_enabled">
+                            <span>Enable Peaks</span>
+                        </label>
+                        <button id="patch_request" class="btn">Fetch Patch</button>
+
+                    </div>
+                    <div id="layout_settings_ui" class="settings-card">
+                        <h3>Layout</h3>
+                        <label class="switch-row">
+                            <input type="checkbox" id="full_width">
+                            <span>Full width (show all channels without scrolling)</span>
+                        </label>
+                    </div>
+                    <div class="settings-card user-profile-card">
+                        <h3>User-Datei</h3>
+                        <button type="button" id="user_profile_save" class="btn">User-Datei speichern</button>
+                        <button type="button" id="user_profile_load" class="btn">User-Datei laden</button>
+                        <input type="file" id="user_profile_file" accept=".json,application/json" hidden>
+                        <small id="user_profile_status" role="status">Oszillatoren, DJ-Zielkurven, Fade-Dauer und Sprache.</small>
+                    </div>
+                    <div id="log_ui" class="settings-card log-card">
+                        <h3>Log</h3>
+                        <p id="track_mode_diagnostic" role="status">Spurmodus: noch kein Umschaltversuch.</p>
+                        <textarea id="log" rows="8" cols="50" readonly></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div id="peers" class="peers-bar"></div>
+
+            <main>
+                <progress id="initial-load"></progress>
+            </main>
+        </div>
+    </body>
+</html>

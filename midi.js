@@ -1,0 +1,469 @@
+// Modified/extended from PimDoos/zoom-L20-control; see AENDERUNGEN.md and LICENSE.
+class MidiMessage {
+    timeStampLsb = null;
+    status = null;
+    channel = null;
+    controller = null;
+    program = null;
+    pitch_bend_value = null;
+
+
+    constructor(data) {
+        this.data = data;
+        this.timeStampLsb = data[0];
+        var status_byte = data[1] & 0xF0;
+        if (status_byte in MIDI_STATUS_BYTES) {
+            this.status = MIDI_STATUS_BYTES[status_byte];
+        } else {
+            this.status = "unknown";
+        }
+        
+        if (this.status == "system_message") {
+            this.values = data.slice(2);
+        } else {
+            this.channel = (data[1] & 0x0F) + 1;
+            if (this.status == "control_change"){
+                this.controller = data[2];
+                this.value = data[3];
+            } else if (this.status == "program_change"){
+                this.program = data[2];
+            } else if (this.status == "pitch_bend"){
+                this.pitch_bend_value = (data[2] << 7) | data[1];
+            } else if (this.status == "note_on" || this.status == "note_off"){
+                this.note = data[2];
+                this.velocity = data[3];
+            }
+        }
+    }
+}
+
+var midi = {};
+
+midi.sysEx = {};
+midi.sysEx.buffer = [];
+midi.sysEx.inProgress = false;
+
+midi.debug = {
+    logRaw: false,
+    logMessage: false,
+    logParsed: false,
+    logSend: false,
+}
+
+midi.handleData = function(event){
+    let value = event.target.value;
+
+    let midiData = new Uint8Array(value.buffer);
+
+    let timeStampMsb = midiData[0];
+    if(midi.debug.logRaw){
+        let rawString = "";
+        for(let i = 0; i < midiData.length; i++){
+            rawString += `${midiData[i].toString(16).toUpperCase()} `;
+        }
+        console.log(rawString);
+    }
+
+    let startIndex = 2;
+    if(midi.sysEx.inProgress){
+        startIndex = 1;
+    }
+
+    for(let i = startIndex; i < midiData.length; i++){
+        if (midiData[i] == MIDI_STATUS.system_message){
+            midi.sysEx.inProgress = true;
+            midi.sysEx.buffer = [midiData[i-1],midiData[i]];
+        } else if(midiData[i] == MIDI_STATUS.system_message_end){
+            midi.sysEx.inProgress = false;
+            let message = new MidiMessage(midi.sysEx.buffer);
+
+            if(midi.debug.logMessage){
+                console.log(message);
+            }
+
+            midi.sysEx.buffer = [];
+            midi.handleMessage(message);
+        } else {
+            if(midi.sysEx.inProgress){
+                midi.sysEx.buffer.push(midiData[i]);
+            } else {
+                let timestampLsb = midiData[i];
+                let message = new MidiMessage(midiData.slice(i-1, i+3));
+                if(midi.debug.logMessage){
+                    console.log(message);
+                }
+                midi.handleMessage(message);
+                i += 3; // skip the next 3 bytes since we've already processed them
+            }
+        }
+    }
+}
+
+midi.handleMessage = function(message){
+    midi.lastMessage = message;
+    if(message.status == "control_change"){
+        let control = getControlByCC(message.controller, message.channel);
+        if(control){
+            control.writeValue(message.value, "midi");
+        }
+    } else if(message.status == "system_message"){
+        let commandByte = message.values[3];
+        if (commandByte in MIDI_SYSEX_BYTES){
+            let command = MIDI_SYSEX_BYTES[commandByte];
+            if(command == "peaks_data" && message.values[4] == 4){
+                let data = message.values.slice(0x06, 0x38);
+
+                /**
+                 * Data is bitmasked:
+                 * - 0x00-0x0C: Peak values
+                 * - 0x10: Signal bit
+                 * - 0x20: Clip bit
+                 * 
+                 * Address 0-19: Master channels 1-20 Pre-fader
+                 * Address 20-23: EFX1+2 L/R Pre-fader
+                 * Address 24-43: Channels 1-20 Post-fader
+                 * Address 44-47: EFX1+2 L/R Post-fader
+                 * Address 48-49: Master L/R Post-fader
+                 */
+
+                let channelPeak = [];
+                let channelSignal = [];
+                let channelClip = [];
+                for(let i = 0; i < 50; i++){
+                    channelPeak.push(data[i] & 0x0F);
+                    channelSignal.push((data[i] & 0x10) > 0);
+                    channelClip.push((data[i] & 0x20) > 0);
+                }
+
+                if(midi.debug.logParsed){
+                    console.log(channelPeak, channelSignal, channelClip);
+                }
+                if(app.ws){
+                    app.wsSendMeter(channelPeak, channelSignal, channelClip);
+                }
+
+                updateMeters(channelPeak, channelSignal, channelClip);
+
+            } else if(command == "patch_response"){
+                const decoder = new TextDecoder();
+                const CHANNEL_CONTROL_ADDR = {
+                    0xAA: "color",
+                    0xBC: "record",
+                    0xCE: "mute",
+                    0xE0: "solo",
+                    0xF2: "phase",
+                    0x104: "pan",
+                    0x116: "eq_off",
+                    0x128: "eq_high_gain",
+                    0x13A: "eq_mid_frequency",
+                    0x14C: "eq_mid_gain",
+                    0x15E: "eq_low_gain",
+                    0x170: "eq_low_cut",
+                    0x182: "efx_1",
+                    0x194: "efx_2",
+                    0x1A6: "master_level",
+                    0x1B8: "monitor_a_level",
+                    0x1CA: "monitor_b_level",
+                    0x1DC: "monitor_c_level",
+                    0x1EE: "monitor_d_level",
+                    0x200: "monitor_e_level",
+                    0x212: "monitor_f_level",
+                }
+                for(let i = 0; i < 18; i++){
+                    let channelPatch = {number: i < 17 ? i + 1 : i + 2};
+                    let stringLength = 0x09;
+                    let startIndex = 0x08 + i * stringLength;
+                    let stopIndex = startIndex + stringLength;
+                    let stringBytes = message.values.slice(startIndex,stopIndex).filter(x => x != 0x00);
+                    
+                    channelPatch.displayName = decoder.decode(
+                        new Uint8Array(stringBytes)
+                    );
+
+                    if(app.confirmChannelName) app.confirmChannelName(channelPatch.number, channelPatch.displayName);
+                    for(let address in CHANNEL_CONTROL_ADDR){
+                        let addressName = CHANNEL_CONTROL_ADDR[address];
+                        let addressStart = parseInt(address) + i;
+                        channelPatch[addressName] = message.values[addressStart];
+                    }
+
+                    if(midi.debug.logParsed){
+                        console.log(channelPatch);
+                    }
+                    for(let bus_id in buses){
+                        let strip = buses[bus_id].strips[`${bus_id}_channel_${channelPatch.number}`];
+                        if(strip){
+                            if(strip.levelController) strip.levelController.updateValue(channelPatch[bus_id + "_level"], "midi");
+                            strip.updateColor(channelPatch.color);
+                            strip.updateDisplayName(channelPatch.displayName);
+                            if(bus_id == "master"){
+                                strip.phaseController.updateValue(channelPatch.phase, "midi");
+                                strip.panController.updateValue(channelPatch.pan, "midi")
+                                strip.recordController.updateValue(channelPatch.record, "midi");
+                                strip.muteController.updateValue(channelPatch.mute, "midi");
+                                strip.soloController.updateValue(channelPatch.solo, "midi");
+                                strip.eqControllers.off.updateValue(channelPatch.eq_off, "midi");
+                                strip.eqControllers.high_gain.updateValue(channelPatch.eq_high_gain, "midi");
+                                strip.eqControllers.mid_gain.updateValue(channelPatch.eq_mid_gain, "midi");
+                                strip.eqControllers.mid_frequency.updateValue(channelPatch.eq_mid_frequency, "midi");
+                                strip.eqControllers.low_gain.updateValue(channelPatch.eq_low_gain, "midi");
+                                strip.eqControllers.low_cut.updateValue(channelPatch.eq_low_cut, "midi");
+                                strip.fxControllers[0].updateValue(channelPatch.efx_1,"midi");
+                                strip.fxControllers[1].updateValue(channelPatch.efx_2,"midi");
+                            }
+                        }
+                        
+                    }
+                }
+
+                let fxReturnPatch = {
+                    master: message.values.slice(0x232,0x234),
+                    monitor_a: message.values.slice(0x234,0x236),
+                    monitor_b: message.values.slice(0x236,0x238),
+                    monitor_c: message.values.slice(0x238,0x23A),
+                    monitor_d: message.values.slice(0x23A,0x23C),
+                    monitor_e: message.values.slice(0x23C,0x23E),
+                    monitor_f: message.values.slice(0x23E,0x240),
+                }
+                for(let bus_id in fxReturnPatch){
+                    for(let efx = 1; efx <= 2; efx++){
+                        let controller = controls.map[`${bus_id}_efx_${efx}_level`];
+                        controller.updateValue(fxReturnPatch[bus_id][efx - 1],"midi");
+                    }
+                }
+                
+                let masterPatch = {
+                    master_record: message.values[0x240],
+                    master_mute: message.values[0x241],
+                };
+                const MASTER_CONTROL_ADDR = ["master_level", "monitor_a_level", "monitor_b_level", "monitor_c_level", "monitor_d_level", "monitor_e_level", "monitor_f_level"]
+                for(let i in MASTER_CONTROL_ADDR){
+                    let index_num = parseInt(i);
+                    masterPatch[MASTER_CONTROL_ADDR[index_num]] = message.values[0x242 + index_num];
+                }
+                if(midi.debug.logParsed){
+                    console.log(masterPatch);
+                }
+                for(let control_id in masterPatch){
+                    let control = controls.map[control_id];
+                    control.updateValue(masterPatch[control_id],"midi");
+                }
+
+
+                if(typeof modulation !== "undefined" && modulation.panel) modulation.panel.refreshTracks();
+                if(app.finishRecordingArmRefresh) app.finishRecordingArmRefresh();
+
+                let eqPatch = {
+                    on: message.values[0x24A],
+                    bands: message.values.slice(0x24B,0x25D),
+                };
+                if(midi.debug.logParsed){
+                    console.log(eqPatch);
+                }
+                for(let i in eqPatch.bands){
+                    let value = eqPatch.bands[i];
+                    let control = controls.map[`geq_band_${i+1}_gain`];
+                    if(control){
+                        control.updateValue(value, "midi");
+                    }
+                }
+                let geqOnControl = controls.map["geq_on"];
+                if(geqOnControl){
+                    geqOnControl.updateValue(eqPatch.on, "midi");
+                }
+
+                let recorderPatch = {
+                    position:{
+                        days: message.values[0x26F],
+                        hours: message.values[0x270],
+                        minutes: message.values[0x271],
+                        seconds: message.values[0x272],
+                    },
+                    remaining:{
+                        days: message.values[0x273],
+                        hours: message.values[0x274],
+                        minutes: message.values[0x275],
+                        seconds: message.values[0x276],
+                    }
+                };
+                recorderPatch.fileName = decoder.decode(
+                    new Uint8Array(
+                        message.values
+                        .slice(0x27D, 0x28A)
+                        .filter(x => x != 0x00)
+                    )
+                );
+
+                for(let recorderPatchKey in recorderPatch){
+                    for(let unit in recorderPatch[recorderPatchKey]){
+                        let control_id = `recorder_${recorderPatchKey}_${unit}`;
+                        let control = controls.map[control_id];
+                        if(control){
+                            control.updateValue(recorderPatch[recorderPatchKey][unit], "midi");
+                        }
+                    }
+                    
+                }
+                if(recorderPatch.fileName){
+                    recorder.updateFileName(recorderPatch.fileName);
+                }
+
+                if(typeof userProfiles !== "undefined" && userProfiles.pendingRoutes.size) userProfiles.activatePendingRoutes();
+                if(midi.debug.logParsed){
+                    console.log(recorderPatch);
+                }
+
+                if(app.ws){
+                    app.wsSendFullState();
+                }
+
+
+
+            } else if(command == "scene_response"){
+                // TODO handle incoming scene data
+            }
+        }
+    }
+}
+
+// Bluetooth allows only one write at a time. All messages go through a queue
+// and are sent one after another. If a fader is moved quickly, only the newest
+// value per control (same status byte + CC number) is kept in the queue.
+midi.sendQueue = [];
+midi.sending = false;
+
+midi.sendMessage = function(data){
+    if(!(app && app.bleMidi && app.bleMidi.characteristic)) return false;
+    let message = new Uint8Array(data);
+    if(midi.debug.logSend){
+        console.log(message);
+    }
+    let isControlChange = message.length == 5 && (message[2] & 0xF0) == MIDI_STATUS.control_change;
+    // CC87 transport commands are button presses, not replaceable fader values.
+    const isTransportButton = isControlChange && message[3] === 87 &&
+        (message[2] & 0x0F) >= 9;
+    if(isControlChange && !isTransportButton){
+        let existing = midi.sendQueue.find(m => m.length == 5 && m[2] == message[2] && m[3] == message[3]);
+        if(existing){
+            existing[4] = message[4];
+            return true;
+        }
+    }
+    midi.sendQueue.push(message);
+    midi.processQueue();
+    return true;
+}
+
+midi.processQueue = async function(){
+    if(midi.sending) return;
+    midi.sending = true;
+    while(midi.sendQueue.length > 0){
+        let characteristic = app.bleMidi && app.bleMidi.characteristic;
+        if(!characteristic){
+            midi.sendQueue = [];
+            break;
+        }
+        let message = midi.sendQueue.shift();
+        let attempts = 0;
+        while(true){
+            try {
+                await characteristic.writeValue(message);
+                break;
+            } catch (error) {
+                attempts++;
+                if(attempts >= 3){
+                    console.error("Error sending MIDI message:", error);
+                    if(app.log) app.log("Bluetooth send error: " + error.message);
+                    break;
+                }
+                await new Promise(r => setTimeout(r, 20));
+            }
+        }
+    }
+    midi.sending = false;
+}
+
+midi.createControlChangeMessage = function(channel, controller, value){
+    return new Uint8Array(
+        [
+            0x80,0x80,
+            MIDI_STATUS.control_change | (channel - 1), 
+            controller, value
+        ]
+    );
+}
+midi.createSystemMessage = function(commandByte, dataBytes = []){
+    return new Uint8Array(
+        [
+            0x80,0x80,
+            MIDI_STATUS.system_message,
+            MIDI_SYSEX.mfg_id,
+            0x00,
+            0x00,
+            commandByte,
+            ...dataBytes,
+            MIDI_STATUS.system_message_end
+        ]
+    );
+}
+
+const MIDI_STATUS = {
+    "note_off": 0x80,
+    "note_on": 0x90,
+    "polyphonic_key_pressure": 0xA0,
+    "control_change": 0xB0,
+    "program_change": 0xC0,
+    "channel_pressure": 0xD0,
+    "pitch_bend": 0xE0,
+    "system_message": 0xF0,
+    "system_message_end": 0xF7,
+}
+const MIDI_STATUS_BYTES = Object.fromEntries(Object.entries(MIDI_STATUS).map(([key, value]) => [value, key]));
+
+const MIDI_SYSEX = {
+    "mfg_id": 0x52, // Zoom Corporation
+    "scene_request": 0x07,
+    "scene_response": 0x06,
+    "patch_request": 0x2B,
+    "patch_response": 0x2A,
+    "peaks_data": 0x31,
+    "peaks_start": 0x50,
+    "peaks_stop": 0x51,
+}
+const MIDI_SYSEX_BYTES = Object.fromEntries(Object.entries(MIDI_SYSEX).map(([key, value]) => [value, key]));
+
+midi.commands = {};
+midi.commands.peaks_start = function(){
+    let message = midi.createSystemMessage(MIDI_SYSEX.peaks_start, [0x80]);
+    midi.sendMessage(message);
+}
+midi.commands.peaks_stop = function(){
+    let message = midi.createSystemMessage(MIDI_SYSEX.peaks_stop, [0x80]);
+    midi.sendMessage(message);
+}
+midi.commands.patch_request = function(){
+    let message = midi.createSystemMessage(MIDI_SYSEX.patch_request, [0x80]);
+    midi.sendMessage(message);
+}
+midi.debug.dumpHex = function(message = midi.debug.lastMessage.values){
+    let hexString = new Uint8Array(message).toHex().toUpperCase();
+    let hexStringPadded = "";
+    for(let i = 0; i < hexString.length; i += 2){
+        hexStringPadded += hexString.slice(i, i + 2);
+        hexStringPadded += " ";
+        if((i % 0x24) == 0) hexStringPadded += "\n";
+    }
+    return hexStringPadded;
+}
+// L20R v1.13: command 0x31, type 2, one-based channel, length LSB/MSB,
+// nine-byte zero-terminated ASCII name. Firmware handler: file 0x17117c.
+midi.commands.rename_channel = function(channel, name){
+    if(!Number.isInteger(channel) || channel < 1 || channel > 20) throw new Error("Ungültiger Kanal");
+    if(!/^[\x20-\x7E]{1,8}$/.test(name)) throw new Error("Bitte 1–8 Zeichen ohne Umlaute oder Emoji verwenden.");
+    const bytes = Array.from(name, char => char.charCodeAt(0));
+    while(bytes.length < 9) bytes.push(0);
+    const message = midi.createSystemMessage(0x31, [2, channel, 9, 0, ...bytes]);
+    const first = midi.sendMessage(message.slice(0, 20));
+    const last = midi.sendMessage(new Uint8Array([0x80, 0x80, 0xF7]));
+    return first && last;
+};
