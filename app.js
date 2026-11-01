@@ -92,7 +92,7 @@ app.finishRecordingArmRefresh = function(){
     // MASTER REC/PLAY=Play excludes all individual channel playback, even
     // when transport is stopped. Resolve that hidden state before the group.
     const masterMode = Number(controls.map.master_record.value);
-    if(masterMode === 1 || pending.clearingMaster){
+    if(!pending.targets.has("master_record") && (masterMode === 1 || pending.clearingMaster)){
         if(masterMode !== 0){
             pending.clearingMaster = true;
             pending.masterRounds = (pending.masterRounds || 0) + 1;

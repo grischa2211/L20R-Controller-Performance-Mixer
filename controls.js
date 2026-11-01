@@ -214,7 +214,7 @@ class MixerStrip {
                 soloButton.innerText = "Solo";
                 this.containerElement.appendChild(soloButton);
             }
-            if(this.recordController && this.channel !== "master"){
+            if(this.recordController){
                 let recordSelect = this.recordController.createElement("select");
                 recordSelect.classList.add("record");
                 this.containerElement.appendChild(recordSelect);
@@ -540,7 +540,7 @@ class Controller {
 
                 element.addEventListener("change", function(e){
                     let control = controls.map[this.dataset.controlId];
-                    if(/^master_channel_\d+_record$/.test(control.id)){
+                    if(/^master_channel_\d+_record$/.test(control.id) || control.id === "master_record"){
                         const requested = Number(e.target.value);
                         e.target.value = control.value;
                         app.setUnmutedTrackMode(requested, [control.id]);
@@ -588,10 +588,11 @@ class Controller {
 
                 let recordButton = document.createElement("button");
                 recordButton.classList.add("record");
-                recordButton.dataset.controlId = this.id;
-                recordButton.addEventListener("click", function(e){
-                    let control = controls.map[this.dataset.controlId];
-                    if(control.value == 0) control.writeValue(3);
+                recordButton.dataset.controlId = "recorder_record_button";
+                recordButton.title = "Aufnahme vorbereiten (REC), danach mit Play starten";
+                recordButton.setAttribute("aria-label", "Aufnahme vorbereiten (REC)");
+                recordButton.addEventListener("click", function(){
+                    controls.map.recorder_record_button.writeValue(3, "local", true);
                 });
                 element.appendChild(recordButton);
 
@@ -1335,6 +1336,8 @@ recorder.transportControl = new Controller(
 );
 // Button commands are separate from CC87/channel9 recorder status feedback.
 // L20R v1.13 receive table: Play CH11, Stop CH12; short press value 3.
+// L20R v1.13: CC87 CH10 value3 posts REC event30, same handler as physical REC.
+recorder.recordButtonControl = new Controller("recorder_record_button", "Recorder Record Button", 87, 10, [0, 3]);
 recorder.playButtonControl = new Controller("recorder_play_button", "Recorder Play/Pause Button", 87, 11, [0, 3]);
 recorder.rewindButtonControl = new Controller("recorder_rewind_button", "Recorder Rewind Button", 87, 13, [0, 5]);
 recorder.forwardButtonControl = new Controller("recorder_forward_button", "Recorder Forward Button", 87, 14, [0, 5]);

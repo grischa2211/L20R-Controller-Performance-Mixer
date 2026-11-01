@@ -1,5 +1,7 @@
 # L20R Controller & Performance Mixer
 
+**Version 2026.11.01** · [Version notes / Versionshinweise](AENDERUNGEN.md#version-20261101--2026-11-01)
+
 A browser-based Bluetooth controller and performance mixer for the **Zoom LiveTrak L-20R**, with a German/English interface. No build step or cloud account is required for direct Bluetooth control.
 
 **This project is vibe coded. It is experimental software, not an official Zoom product. Use entirely at your own risk.** It can change mixer levels, EQ, effects and recording/playback settings in real time. Test it with your own setup before using it in a live show or an important recording. There is no warranty that every function works on every firmware/browser combination.
