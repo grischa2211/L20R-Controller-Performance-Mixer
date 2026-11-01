@@ -306,13 +306,16 @@ class MixerStrip {
             );
         }
         if(this.eqControllers["off"]){
-            let eqContainer = document.createElement("div");
-            eqContainer.classList.add("parametric-eq");
-
             let eqOffButton = this.eqControllers["off"].createElement("toggle");
             eqOffButton.innerText = "EQ OFF";
             eqOffButton.classList.add("off");
-            eqContainer.appendChild(eqOffButton);
+            eqOffButton.type = "button";
+            const nameForm = this.inspectorElement.querySelector(".channel-name-form");
+            if(nameForm){
+                nameForm.insertBefore(eqOffButton, nameForm.querySelector(".channel-name-status"));
+            } else {
+                this.inspectorElement.appendChild(eqOffButton);
+            }
 
             for(let i in this.eqControllers){
                 let eqController = this.eqControllers[i];
@@ -329,7 +332,6 @@ class MixerStrip {
 
                 
             }
-            this.inspectorElement.appendChild(eqContainer);
         }
 
         if(this.fxSlot){
@@ -1488,24 +1490,46 @@ masterPlaybackControl.writeValue = function(value, source = "local", force = fal
 // Firmware transport values: 3 = press, 5 = repeat/seek, 4 = release.
 function bindHoldTransportButton(button, controlId){
     let held = false;
+    let seeking = false;
     let delay = null;
     let repeat = null;
+    let pulseEnd = null;
+    let lastInteraction = -Infinity;
+    let holdStarted = 0;
     const send = value => controls.map[controlId].writeValue(value, "local", true);
+    // Release between short seek pulses so firmware cannot accelerate a
+    // continuous hold. Never send the marker-jump press before a long hold.
+    const pulse = () => {
+        if(!held) return;
+        send(5);
+        pulseEnd = setTimeout(() => {
+            pulseEnd = null;
+            send(4);
+            // After five seconds, increase from roughly 3 to 10 seek
+            // pulses per second, still releasing each pulse to avoid runaway.
+            if(held) repeat = setTimeout(pulse, Date.now() - holdStarted >= 5000 ? 40 : 240);
+        }, 60);
+    };
     const start = () => {
         if(held || button.disabled) return;
         held = true;
-        send(3);
+        seeking = false;
+        lastInteraction = Date.now();
+        holdStarted = lastInteraction;
         delay = setTimeout(() => {
             if(!held) return;
-            send(5);
-            repeat = setInterval(() => send(5), 120);
-        }, 400);
+            seeking = true;
+            pulse();
+        }, 350);
     };
-    const stop = () => {
+    const stop = (cancel = false) => {
         if(!held) return;
         held = false;
+        lastInteraction = Date.now();
         clearTimeout(delay);
-        clearInterval(repeat);
+        clearTimeout(repeat);
+        clearTimeout(pulseEnd);
+        if(!seeking && !cancel) send(3);
         send(4);
     };
     button.addEventListener("pointerdown", event => {
@@ -1513,9 +1537,9 @@ function bindHoldTransportButton(button, controlId){
         button.setPointerCapture(event.pointerId);
         start();
     });
-    button.addEventListener("pointerup", stop);
-    button.addEventListener("pointercancel", stop);
-    button.addEventListener("lostpointercapture", stop);
+    button.addEventListener("pointerup", () => stop());
+    button.addEventListener("pointercancel", () => stop(true));
+    button.addEventListener("lostpointercapture", () => stop(true));
     button.addEventListener("keydown", event => {
         if(event.key !== " " && event.key !== "Enter") return;
         event.preventDefault();
@@ -1526,11 +1550,11 @@ function bindHoldTransportButton(button, controlId){
         event.preventDefault();
         stop();
     });
-    button.addEventListener("blur", stop);
+    button.addEventListener("blur", () => stop(true));
     // Assistive technology can activate a button without pointer/key events.
     button.addEventListener("click", event => {
-        if(event.detail === 0 && !held){ send(3); send(4); }
+        if(event.detail === 0 && !held && !button.disabled && Date.now() - lastInteraction > 500){ send(3); send(4); }
     });
-    window.addEventListener("blur", stop);
-    window.addEventListener("pagehide", stop);
+    window.addEventListener("blur", () => stop(true));
+    window.addEventListener("pagehide", () => stop(true));
 }
